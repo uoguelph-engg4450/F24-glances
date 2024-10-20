@@ -27,7 +27,7 @@ class Bar:
     def __init__(
         self,
         size,
-        bar_char='|',
+        bar_char='x', #changes here
         empty_char=' ',
         pre_char='[',
         post_char=']',
