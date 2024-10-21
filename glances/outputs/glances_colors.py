@@ -75,7 +75,7 @@ class GlancesColors:
         curses.init_pair(8, curses.COLOR_MAGENTA, -1)
 
         # Colors text styles
-        self.DEFAULT = curses.color_pair(1)
+        self.DEFAULT = curses.color_pair(1) #this is the default color 1, which is
         self.OK_LOG = curses.color_pair(3) | self.A_BOLD
         self.NICE = curses.color_pair(8)
         self.CPU_TIME = curses.color_pair(8)

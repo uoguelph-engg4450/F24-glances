@@ -91,12 +91,23 @@ class _GlancesCurses:
         'z': {'handler': '_handle_disable_process'},
         '+': {'handler': '_handle_increase_nice'},
         '-': {'handler': '_handle_decrease_nice'},
+        ';': {'handler': '_handle_semicolon'},
+        '0': {'handler': '_handle_zero'},
         # "<" (left arrow) navigation through process sort
         # ">" (right arrow) navigation through process sort
         # 'UP' > Up in the server list
         # 'DOWN' > Down in the server list
     }
 
+    
+    
+    def _handle_semicolon(self):
+        self.args.disable_cursor = not self.args.disable_cursor
+        
+    # def _handle_zero(self):
+    #     self.args.disable_cursor = not self.args.disable_cursor
+        
+    
     _sort_loop = sort_processes_key_list
 
     # Define top menu
@@ -110,7 +121,7 @@ class _GlancesCurses:
     _left_sidebar = [
         'network',
         'ports',
-        'wifi',
+        'wifiiii',
         'connections',
         'diskio',
         'fs',
@@ -127,6 +138,8 @@ class _GlancesCurses:
     # Define right sidebar
     _right_sidebar = ['vms', 'containers', 'processcount', 'amps', 'processlist', 'alert']
 
+    
+    
     def __init__(self, config=None, args=None):
         # Init
         self.config = config
@@ -324,6 +337,10 @@ class _GlancesCurses:
         else:
             glances_processes.enable_extended()
         self.args.disable_cursor = self.args.enable_process_extended and self.args.is_standalone
+    
+    
+    #handle the forward slash
+   
 
     def _handle_erase_filter(self):
         glances_processes.process_filter = None
@@ -1109,7 +1126,7 @@ class _GlancesCurses:
         while not countdown.finished() and not isexitkey:
             # Getkey
             pressedkey = self.__catch_key(return_to_browser=return_to_browser)
-            isexitkey = pressedkey == ord('\x1b') or pressedkey == ord('q')
+            isexitkey = pressedkey == ord('\x1b') or pressedkey == ord('q') or pressedkey == ord('/') #lookUP
 
             if pressedkey == curses.KEY_F5 or self.pressedkey == 18:
                 # Were asked to refresh (F5 or Ctrl-R)
@@ -1210,3 +1227,6 @@ class GlancesTextboxYesNo(Textbox):
 
     def do_command(self, ch):
         return super().do_command(ch)
+
+
+    
