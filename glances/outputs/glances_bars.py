@@ -6,6 +6,10 @@
 # SPDX-License-Identifier: LGPL-3.0-only
 #
 
+
+####MATTHEW NOTES: Changes outputs.
+
+
 """Manage bars for Glances output."""
 
 from math import modf
@@ -27,10 +31,10 @@ class Bar:
     def __init__(
         self,
         size,
-        bar_char='x', #changes here
+        bar_char='|', #changes here
         empty_char=' ',
-        pre_char='[',
-        post_char=']',
+        pre_char='{',
+        post_char='}',
         unit_char='%',
         display_value=True,
         min_value=0,
@@ -107,7 +111,7 @@ class Bar:
 
         # Add the value
         if self.__display_value:
-            if self.percent >= self.max_value:
+            if self.percent >= self.max_value: 
                 ret = '{} {}{:3.0f}{}'.format(
                     ret, '>' if self.percent > self.max_value else ' ', self.max_value, self.__unit_char
                 )
