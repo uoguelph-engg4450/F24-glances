@@ -18,7 +18,7 @@ from glances import __apiversion__, __version__, psutil_version
 from glances.config import Config
 from glances.globals import WINDOWS, disable, enable
 from glances.logger import LOG_FILENAME, logger
-from glances.processes import sort_processes_key_list
+from glances.processes import sort_processes_stats_list
 
 
 class GlancesMain:
@@ -70,8 +70,11 @@ Examples of use:
   Connect Glances to a Glances server and export stats to a StatsD server (client mode):
     $ glances -c <ip_server> --export statsd
 
-  Start the client browser (browser mode):
+  Start TUI Central Glances Browser:
     $ glances --browser
+
+  Start WebUI Central Glances Browser:
+    $ glances --browser -w
 
   Display stats to stdout (one stat per line, possible to go inside stats using plugin.attribute):
     $ glances --stdout now,cpu.user,mem.used,load
@@ -105,6 +108,40 @@ Examples of use:
         version += f'PsUtil version:\t\t{psutil_version}\n'
         version += f'Log file:\t\t{LOG_FILENAME}\n'
         return version
+    
+    def handle_keypress(self, key):
+        """
+        Handle key presses in standalone mode.
+        """
+        if key == "n":  # Check for 'n' key (NVMe information)
+            from glances.plugins.nvme import PluginNVMe
+            nvme_plugin = PluginNVMe()
+            nvme_info = nvme_plugin.get_nvme_data()
+
+            if isinstance(nvme_info, str):
+                logger.info(f"NVMe Error: {nvme_info}")
+            else:
+                for device, info in nvme_info.items():
+                    logger.info(f"Device: {device}\n{info}")
+
+        elif key in ["q", "\x1b"]:  # Quit
+            logger.info("Exiting Glances...")
+            sys.exit(0)
+        else:
+            logger.warning(f"Unhandled key press: {key}")
+
+    def check_plugins(self, args):
+        """
+        Check if all required plugins are available and warn if some are missing.
+        """
+        required_plugins = ['nvme', 'cpu', 'mem']
+        missing_plugins = [p for p in required_plugins if not getattr(args, f'enable_{p}', False)]
+
+        if missing_plugins:
+            logger.warning(f"The following plugins are missing or disabled: {', '.join(missing_plugins)}")
+
+
+
 
     def init_args(self):
         """Init all the command line arguments."""
@@ -266,8 +303,8 @@ Examples of use:
         parser.add_argument(
             '--sort-processes',
             dest='sort_processes_key',
-            choices=sort_processes_key_list,
-            help='Sort processes by: {}'.format(', '.join(sort_processes_key_list)),
+            choices=sort_processes_stats_list,
+            help='Sort processes by: {}'.format(', '.join(sort_processes_stats_list)),
         )
         # Display processes list by program name and not by thread
         parser.add_argument(
@@ -318,7 +355,7 @@ Examples of use:
             action='store_true',
             default=False,
             dest='browser',
-            help='start the client browser (list of servers)',
+            help='start TUI Central Glances Browser (use --browser -w to start WebUI Central Glances Browser)',
         )
         parser.add_argument(
             '--disable-autodiscover',
@@ -613,8 +650,8 @@ Examples of use:
         args.network_sum = False
         args.network_cumul = False
 
-        # Processlist id updated in processcount
-        if getattr(args, 'enable_processlist', False):
+        # Processlist is updated in processcount
+        if getattr(args, 'enable_processlist', False) or getattr(args, 'enable_programlist', False):
             enable(args, 'processcount')
 
         # Set a default export_process_filter (with all process) when using the stdout mode
@@ -811,11 +848,11 @@ Examples of use:
 
     def is_client(self):
         """Return True if Glances is running in client mode."""
-        return (self.args.client or self.args.browser) and not self.args.server
+        return (self.args.client or self.args.browser) and not self.args.server and not self.args.webserver
 
     def is_client_browser(self):
         """Return True if Glances is running in client browser mode."""
-        return self.args.browser and not self.args.server
+        return self.args.browser and not self.args.server and not self.args.webserver
 
     def is_server(self):
         """Return True if Glances is running in server mode."""

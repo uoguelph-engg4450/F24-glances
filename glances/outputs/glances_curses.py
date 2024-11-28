@@ -16,7 +16,7 @@ from glances.globals import MACOS, WINDOWS, disable, enable, itervalues, natives
 from glances.logger import logger
 from glances.outputs.glances_colors import GlancesColors
 from glances.outputs.glances_unicode import unicode_message
-from glances.processes import glances_processes, sort_processes_key_list
+from glances.processes import glances_processes, sort_processes_stats_list
 from glances.timer import Timer
 
 # Import curses library for "normal" operating system
@@ -97,7 +97,7 @@ class _GlancesCurses:
         # 'DOWN' > Down in the server list
     }
 
-    _sort_loop = sort_processes_key_list
+    _sort_loop = sort_processes_stats_list
 
     # Define top menu
     _top = ['quicklook', 'cpu', 'percpu', 'gpu', 'mem', 'memswap', 'load']
@@ -124,8 +124,8 @@ class _GlancesCurses:
     _left_sidebar_min_width = 23
     _left_sidebar_max_width = 34
 
-    # Define right sidebar
-    _right_sidebar = ['vms', 'containers', 'processcount', 'amps', 'processlist', 'alert']
+    # Define right sidebar in a method because it depends of self.args.programs
+    # See def _right_sidebar method
 
     def __init__(self, config=None, args=None):
         # Init
@@ -204,6 +204,16 @@ class _GlancesCurses:
             # Set the left sidebar list
             self._left_sidebar = config.get_list_value('outputs', 'left_menu', default=self._left_sidebar)
 
+    def _right_sidebar(self):
+        return [
+            'vms',
+            'containers',
+            'processcount',
+            'amps',
+            'programlist' if self.args.programs else 'processlist',
+            'alert',
+        ]
+
     def _init_history(self):
         """Init the history option."""
 
@@ -262,11 +272,11 @@ class _GlancesCurses:
         elif self.pressedkey == curses.KEY_F5 or self.pressedkey == 18:
             self._handle_refresh()
 
-    def __catch_key(self, return_to_browser=False):
-        # Catch the pressed key
-        self.pressedkey = self.get_key(self.term_window)
-        if self.pressedkey == -1:
-            return self.pressedkey
+        def __catch_key(self, return_to_browser=False):
+            # Catch the pressed key
+            self.pressedkey = self.get_key(self.term_window)
+            if self.pressedkey == -1:
+                return self.pressedkey
 
         # Actions (available in the global hotkey dict)...
         logger.debug(f"Keypressed (code: {self.pressedkey})")
@@ -275,8 +285,34 @@ class _GlancesCurses:
         # Other actions with key > 255 (ord will not work) and/or additional test...
         self.catch_other_actions_maybe_return_to_browser(return_to_browser)
 
+        # Add handling for NVMe display on 'n' key press
+        if self.pressedkey == ord('n'):  # Check for 'n' key press
+            self._handle_nvme_info()
+
         # Return the key code
         return self.pressedkey
+    
+    def _handle_nvme_info(self):
+        """
+        Handle the display of NVMe information when the 'n' key is pressed.
+        """
+        from glances.plugins.nvme import PluginNVMe
+
+        nvme_plugin = PluginNVMe()
+        nvme_data = nvme_plugin.get_nvme_data()
+
+        if isinstance(nvme_data, str):  # Error message
+            self.display_popup(nvme_data, popup_type='info', duration=3)
+            return
+
+        # Create a formatted string to display NVMe data
+        nvme_display = "=== NVMe Information ===\n\n"
+        for device, data in nvme_data.items():
+            nvme_display += f"Device: {device}\n{data}\n\n"
+
+        # Display NVMe data in a popup
+        self.display_popup(nvme_display, popup_type='info', duration=5)
+
 
     def _handle_switch(self, hotkey):
         option = '_'.join(self._hotkeys[hotkey]['switch'].split('_')[1:])
@@ -508,7 +544,7 @@ class _GlancesCurses:
             "SNMP": Client is connected to a SNMP server
             "Disconnected": Client is disconnected from the server
 
-        :return: True if the stats have been displayed else False if the help have been displayed
+        :return: True if the stats have been displayed else False if the help has been displayed
         """
         # Init the internal line/column for Glances Curses
         self.init_line_column()
@@ -516,7 +552,7 @@ class _GlancesCurses:
         # Update the stats messages
         ###########################
 
-        # Get all the plugins view
+        # Get all the plugins' views
         self.args.cs_status = cs_status
         __stat_display = self.__get_stat_display(stats, layer=cs_status)
 
@@ -555,7 +591,23 @@ class _GlancesCurses:
         self.__display_right(__stat_display)
 
         # =====================
-        # Others popup messages
+        # Display NVMe Data (if toggled)
+        # =====================
+        if hasattr(self, "show_nvme_info") and self.show_nvme_info:
+            from glances.plugins.nvme import PluginNVMe
+            nvme_plugin = PluginNVMe()
+            nvme_data = nvme_plugin.get_nvme_data()
+            nvme_display = "=== NVMe Information ===\n\n"
+            if isinstance(nvme_data, str):  # Error message
+                nvme_display += nvme_data
+            else:
+                for device, data in nvme_data.items():
+                    nvme_display += f"Device: {device}\n{data}\n\n"
+            self.new_line()
+            self.display_plugin({'msgdict': [{'msg': nvme_display, 'optional': False}]})
+
+        # =====================
+        # Other popup messages
         # =====================
 
         # Display edit filter popup
@@ -600,7 +652,7 @@ class _GlancesCurses:
             if 'graph' in stats.getExportsList():
                 self.display_popup(f'Generate graph in {self.args.export_graph_path}')
             else:
-                logger.warning('Graph export module is disable. Run Glances with --export graph to enable it.')
+                logger.warning('Graph export module is disabled. Run Glances with --export graph to enable it.')
                 self.args.generate_graph = False
 
         return True
@@ -790,7 +842,7 @@ class _GlancesCurses:
 
         # Display right sidebar
         self.new_column()
-        for p in self._right_sidebar:
+        for p in self._right_sidebar():
             if (hasattr(self.args, 'enable_' + p) or hasattr(self.args, 'disable_' + p)) and p in stat_display:
                 self.new_line()
                 if p == 'processlist':
@@ -863,7 +915,7 @@ class _GlancesCurses:
 
         # Add the message
         for y, m in enumerate(sentence_list):
-            if len(m) > 0:
+            if m:
                 popup.addnstr(2 + y, 2, m, len(m))
 
         if popup_type == 'info':
@@ -903,11 +955,14 @@ class _GlancesCurses:
             return None
 
         if popup_type == 'yesno':
-            # # Create a sub-window for the text field
+            # Create a sub-window for the text field
             sub_pop = popup.derwin(1, 2, len(sentence_list) + 1, len(m) + 2)
             sub_pop.attron(self.colors_list['FILTER'])
             # Init the field with the current value
-            sub_pop.addnstr(0, 0, '', 0)
+            try:
+                sub_pop.addnstr(0, 0, '', 0)
+            except curses.error:
+                pass
             # Display the popup
             popup.refresh()
             sub_pop.refresh()
